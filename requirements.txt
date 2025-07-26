@@ -1,0 +1,5 @@
+torch
+packaging
+tokenizers
+flash-attn
+numpy

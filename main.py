@@ -4,7 +4,6 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.cuda.amp import autocast, GradScaler
 import torch._dynamo
-from gpt_dataset import GPTDataset
 from streaming_gpt_dataset import StreamingGPTDataset
 from gpt2_model import GPT2LikeModel
 from tokenizers import ByteLevelBPETokenizer
@@ -104,7 +103,6 @@ def train_spot_instance_safe():
     
     # ============= SETUP =============
     device = torch.device('cuda')
-    # device = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.set_float32_matmul_precision('high')

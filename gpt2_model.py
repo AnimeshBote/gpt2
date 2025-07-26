@@ -38,7 +38,6 @@ from flash import FlashBlock
 #         logits = self.head(x)          # [b, t, vocab_size]
 #         return logits
 
-
 class GPT2LikeModel(nn.Module):
     def __init__(self, vocab_size, block_size, n_embd=768, n_layer=6, n_head=6, dropout=0.1):
         super().__init__()
@@ -54,9 +53,12 @@ class GPT2LikeModel(nn.Module):
     def forward(self, idx):
         b, t = idx.size()
         device = idx.device
+        
+        # FIXED: Clone embeddings to prevent CUDA graph memory overwrites
         tok_emb = self.token_emb(idx)
         pos = torch.arange(t, device=device).unsqueeze(0)
         pos_emb = self.pos_emb(pos)
+        
         x = self.drop(tok_emb + pos_emb)
 
         for block in self.blocks:

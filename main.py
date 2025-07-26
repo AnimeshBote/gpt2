@@ -1,4 +1,6 @@
 import time
+import os 
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -10,10 +12,10 @@ from tokenizers import ByteLevelBPETokenizer
 import warnings
 import signal
 import sys
-import os
 import json
 import threading
 warnings.filterwarnings('ignore')
+torch.cuda.empty_cache()
 
 class InterruptionSafeTrainer:
     def __init__(self):
@@ -113,8 +115,8 @@ def train_spot_instance_safe():
     vocab_size = tokenizer.get_vocab_size()
     block_size = 1024
     
-    dataset = StreamingGPTDataset("data1/tokenized_ids.bin", block_size, stride=512)
-    batch_size = 128
+    dataset = StreamingGPTDataset("tokenized_ids.bin", block_size, stride=512)
+    batch_size = 64
     loader = DataLoader(
         dataset, 
         batch_size=batch_size, 
@@ -125,8 +127,8 @@ def train_spot_instance_safe():
     )
     
     model = GPT2LikeModel(vocab_size, block_size, 256, 6, 2).to(device)
-    model = torch.compile(model, mode='max-autotune')
-    
+    # model = torch.compile(model, mode='max-autotune')
+    model = torch.compile(model, options={'triton.cudagraphs': False})
     optimizer = torch.optim.AdamW(
         model.parameters(), 
         lr=2e-4,
@@ -211,6 +213,8 @@ def train_spot_instance_safe():
             
             with autocast():
                 idx = batch.to(device, non_blocking=True)
+
+                torch.compiler.cudagraph_mark_step_begin()
                 logits = model(idx)
                 
                 shift_logits = logits[:, :-1, :].contiguous()
@@ -243,39 +247,6 @@ def train_spot_instance_safe():
                 elapsed = time.time() - start_time
                 print(f"📊 Epoch {epoch+1} Step {step_count} | Loss: {avg_loss:.4f} | Time: {elapsed/60:.1f}min")
                 total_loss = 0.0
-            
-            # Frequent safety checkpoints
-            # if step_count > 0 and step_count % 100 == 0:  # Every 100 steps (was 500)
-            #     checkpoint_path = f"checkpoint_epoch{epoch+1}_step{step_count}.pt"
-                
-            #     checkpoint_data = {
-            #         'model_state_dict': model.state_dict(),
-            #         'optimizer_state_dict': optimizer.state_dict(),
-            #         'scaler_state_dict': scaler.state_dict(),
-            #         'epoch': epoch,
-            #         'step': step_count,
-            #         'loss': avg_loss,
-            #         'batch_idx': batch_idx,
-            #         'timestamp': int(time.time())
-            #     }
-                
-            #     torch.save(checkpoint_data, checkpoint_path)
-                
-            #     # Update metadata
-            #     metadata = {
-            #         'checkpoint_file': checkpoint_path,
-            #         'epoch': epoch,
-            #         'step': step_count,
-            #         'loss': avg_loss,
-            #         'batch_idx': batch_idx,
-            #         'timestamp': int(time.time()),
-            #         'status': 'training'
-            #     }
-                
-            #     with open('training_state.json', 'w') as f:
-            #         json.dump(metadata, f, indent=2)
-                
-            #     print(f"💾 Safety checkpoint: {checkpoint_path}")
         
         # Reset batch index for next epoch
         start_batch_idx = 0
@@ -341,14 +312,14 @@ def estimate_spot_vs_ondemand():
     print("=" * 60)
 
 if __name__ == '__main__':
-    estimate_spot_vs_ondemand()
+    # estimate_spot_vs_ondemand()
     
     # Ask user for confirmation
-    print("\n🔄 Ready to start spot instance training?")
-    print("📋 This will use checkpointing to handle interruptions")
-    response = input("Continue? (y/n): ")
-    
-    if response.lower().startswith('y'):
-        train_spot_instance_safe()
-    else:
-        print("Training cancelled.")
+    # print("\n🔄 Ready to start spot instance training?")
+    # print("📋 This will use checkpointing to handle interruptions")
+    # response = input("Continue? (y/n): ")
+    train_spot_instance_safe()
+    # if response.lower().startswith('y'):
+    #     train_spot_instance_safe()
+    # else:
+    #     print("Training cancelled.")
